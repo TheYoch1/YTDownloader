@@ -179,12 +179,55 @@ fun MainScreen(viewModel: DownloaderViewModel, config: AppConfig) {
     val settings by viewModel.currentSettings.collectAsState()
     var urlInput by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
+    
+    var updateAvailable by remember { mutableStateOf<GithubRelease?>(null) }
+    val context = LocalContext.current
+    
+    LaunchedEffect(Unit) {
+        try {
+            val release = checkGithubUpdate()
+            if (release != null) {
+                val currentVersion = BuildConfig.VERSION_NAME
+                val remoteVersion = release.tag_name.removePrefix("v")
+                if (remoteVersion != currentVersion && release.tag_name != currentVersion) {
+                    updateAvailable = release
+                }
+            }
+        } catch(e: Exception) {
+            // Ignore failure
+        }
+    }
+    
+    if (updateAvailable != null) {
+        val release = updateAvailable!!
+        AlertDialog(
+            onDismissRequest = { updateAvailable = null },
+            title = { Text("Update Available") },
+            text = { Text("A new version (${release.tag_name}) is available. Would you like to download it?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    try {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(release.html_url))
+                        context.startActivity(intent)
+                    } catch(e: Exception) {}
+                    updateAvailable = null
+                }) {
+                    Text("Download")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { updateAvailable = null }) {
+                    Text("Later")
+                }
+            }
+        )
+    }
+
     var formatDialogUrl by remember { mutableStateOf<String?>(null) }
     var formatDialogTitle by remember { mutableStateOf<String?>(null) }
     var showErrorLog by remember { mutableStateOf(false) }
     var showHistoryLog by remember { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
-    val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
 
@@ -1360,6 +1403,28 @@ fun SettingsBottomSheet(
             ) {
                 Text("Done")
             }
+        }
+    }
+}
+
+data class GithubRelease(val tag_name: String, val html_url: String)
+
+suspend fun checkGithubUpdate(): GithubRelease? {
+    return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            val client = okhttp3.OkHttpClient()
+            val request = okhttp3.Request.Builder()
+                .url("https://api.github.com/repos/TheYoch1/YTDownloader/releases/latest")
+                .header("User-Agent", "YTDownloader-Update-Checker")
+                .build()
+            val response = client.newCall(request).execute()
+            if (response.isSuccessful) {
+                response.body?.string()?.let {
+                    com.google.gson.Gson().fromJson(it, GithubRelease::class.java)
+                }
+            } else null
+        } catch (e: Exception) {
+            null
         }
     }
 }
