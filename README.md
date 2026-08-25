@@ -1,11 +1,13 @@
-<div align="center">
+# YouTube Playlist Downloader (Android Rewrite)
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+This is an Android rewrite of the original YouTube Playlist Downloader desktop app.
 
-  <h1>Built with AI Studio</h2>
+## Features (Simulated)
+- Download single videos or entire playlists
+- Save as MP3 (Audio) or Video
+- Select Video Quality (144p to 4320p)
+- Tag audio files
+- Clean and modern Material 3 interface
+- Real-time download progress tracking
 
-  <p>The fastest path from prompt to production with Gemini.</p>
-
-  <a href="https://aistudio.google.com/apps">Start building</a>
-
-</div>
+*Note: The actual downloading process is simulated in this rewritten application to demonstrate the UI and state management.*
