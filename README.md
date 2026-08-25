@@ -5,7 +5,7 @@ This is an Android rewrite of the original YouTube Playlist Downloader desktop a
 ## Features (Simulated)
 - Download single videos or entire playlists
 - Save as MP3 (Audio) or Video
-- Select Video Quality (144p to 4320p)
+- Select Video Quality (480p to 4320p)
 - Tag audio files
 - Clean and modern Material 3 interface
 - Real-time download progress tracking
