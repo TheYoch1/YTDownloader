@@ -1,58 +1,95 @@
 import re
+with open("app/src/main/java/com/aistudio/ytdownloader/DownloaderViewModel.kt", "r") as f:
+    text = f.read()
 
-# 1. Update MainActivity for multi URL and Queue display
-with open("app/src/main/java/com/aistudio/ytdownloader/MainActivity.kt", "r") as f:
-    main = f.read()
+# Fix Video location
+text = text.replace(
+    'val saveDir = if (item.settings.audioOnly) File(baseDir, "Music") else File(baseDir, "Video")',
+    'val saveDir = if (item.settings.audioOnly) File(baseDir, "Music") else File(baseDir, "Videos")'
+)
 
-main = main.replace("singleLine = true", "maxLines = 5")
+# Fix File copying for playlists
+old_copy = """            var downloadedFile: File? = null
+            tmpDir.listFiles()?.forEach { file ->
+                if (!file.name.endsWith(".part") && !file.name.endsWith(".ytdl")) {
+                    downloadedFile = file
+                }
+            }
+            
+            var finalFileUri: String? = null
+            if (downloadedFile != null) {
+                val destFile = File(saveDir, downloadedFile!!.name)
+                var actualDest = destFile
+                var counter = 1
+                while (actualDest.exists()) {
+                    val nameWithoutExt = downloadedFile!!.nameWithoutExtension
+                    val ext = downloadedFile!!.extension
+                    actualDest = File(saveDir, "${nameWithoutExt}_$counter.$ext")
+                    counter++
+                }
+                downloadedFile!!.copyTo(actualDest, overwrite = true)
+                finalFileUri = actualDest.absolutePath
+            }"""
 
-confirm_target = """                    val customSettings = DownloadSettings(
-                        audioOnly = isAudio,
-                        quality = selectedQuality,
-                        downloadSubtitles = downloadSubtitles,
-                        saveFormat = "mp3"
-                    )
-                    viewModel.addDownload(formatDialogUrl!!, formatDialogTitle, customSettings)
-                    urlInput = \"\""""
-confirm_rep = """                    val customSettings = DownloadSettings(
-                        audioOnly = isAudio,
-                        quality = selectedQuality,
-                        downloadSubtitles = downloadSubtitles,
-                        saveFormat = "mp3"
-                    )
-                    val urls = formatDialogUrl!!.split(Regex("\\\\s+")).filter { it.isNotBlank() && (it.startsWith("http://") || it.startsWith("https://") || it.contains("youtu")) }
-                    if (urls.size > 1) {
-                        urls.forEach { u ->
-                            viewModel.addDownload(u, null, customSettings)
-                        }
-                    } else {
-                        viewModel.addDownload(formatDialogUrl!!.trim(), formatDialogTitle, customSettings)
+new_copy = """            var finalFileUri: String? = null
+            tmpDir.listFiles()?.forEach { file ->
+                if (!file.name.endsWith(".part") && !file.name.endsWith(".ytdl")) {
+                    val destFile = File(saveDir, file.name)
+                    var actualDest = destFile
+                    var counter = 1
+                    while (actualDest.exists()) {
+                        val nameWithoutExt = file.nameWithoutExtension
+                        val ext = file.extension
+                        actualDest = File(saveDir, "${nameWithoutExt}_$counter.$ext")
+                        counter++
                     }
-                    urlInput = \"\""""
-main = main.replace(confirm_target, confirm_rep)
+                    file.copyTo(actualDest, overwrite = true)
+                    finalFileUri = actualDest.absolutePath
+                }
+            }"""
 
-# Ensure "Finished" or "Completed" stay in the queue
-# We look for where activeDownloads is filtered
-active_target = """    val activeDownloads = downloadQueue.filter { it.status != "Completed" && it.status != "Cancelled" }"""
-active_rep = """    val activeDownloads = downloadQueue.filter { it.status != "Cancelled" }"""
-main = main.replace(active_target, active_rep)
+text = text.replace(old_copy, new_copy)
 
-# Modify History/Storage Saved view
-history_target = """            Text(
-                "App Settings",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )"""
-history_rep = """            Text(
-                "App Settings",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )"""
-# Wait, user wants to "the history option should not be how it is change it and take away storage saved"
-# Let's remove the storage saved chart from the Dashboard/History completely
-# I need to find the Storage Saved section in MainActivity
-with open("app/src/main/java/com/aistudio/ytdownloader/MainActivity.kt", "w") as f:
-    f.write(main)
+# Fix progress reporting for playlists
+old_update = """                _downloadQueue.update { q -> 
+                    q.map { 
+                        if (it.id == id && it.status != "Cancelled" && it.status != "Paused") {
+                            it.copy(
+                                progress = progress, 
+                                downloadSpeed = speed,
+                                currentItemIndex = if (newIndex != -1) newIndex else it.currentItemIndex,
+                                totalItems = if (newTotal != -1) newTotal else it.totalItems,
+                                currentItemTitle = newTitle ?: it.currentItemTitle
+                            )
+                        } else it 
+                    }
+                }"""
 
+new_update = """                _downloadQueue.update { q -> 
+                    q.map { 
+                        if (it.id == id && it.status != "Cancelled" && it.status != "Paused") {
+                            val currentIndex = if (newIndex != -1) newIndex else it.currentItemIndex
+                            val total = if (newTotal != -1) newTotal else it.totalItems
+                            val activeTitle = newTitle ?: it.currentItemTitle
+                            
+                            val effectiveProgress = if (it.isPlaylist && total > 0 && currentIndex > 0) {
+                                (((currentIndex - 1) * 100f) + progress) / total
+                            } else {
+                                progress
+                            }
+                            
+                            it.copy(
+                                progress = effectiveProgress, 
+                                downloadSpeed = speed,
+                                currentItemIndex = currentIndex,
+                                totalItems = total,
+                                currentItemTitle = activeTitle
+                            )
+                        } else it 
+                    }
+                }"""
+
+text = text.replace(old_update, new_update)
+
+with open("app/src/main/java/com/aistudio/ytdownloader/DownloaderViewModel.kt", "w") as f:
+    f.write(text)

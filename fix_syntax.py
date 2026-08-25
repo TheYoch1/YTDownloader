@@ -1,7 +1,21 @@
-with open("app/src/main/java/com/aistudio/ytdownloader/MainActivity.kt", "r") as f:
-    content = f.read()
+with open("app/src/main/java/com/aistudio/ytdownloader/DownloadService.kt", "r") as f:
+    text = f.read()
 
-opened = content.count('{')
-closed = content.count('}')
+text = text.replace(
+    '''        }
+        } else if (action == ACTION_CHECK_QUEUE) {
+            checkQueue()
+        }
 
-print(f"Total opened: {opened}, closed: {closed}")
+        return START_NOT_STICKY
+    }''',
+    '''        } else if (action == ACTION_CHECK_QUEUE) {
+            checkQueue()
+        }
+
+        return START_NOT_STICKY
+    }'''
+)
+
+with open("app/src/main/java/com/aistudio/ytdownloader/DownloadService.kt", "w") as f:
+    f.write(text)

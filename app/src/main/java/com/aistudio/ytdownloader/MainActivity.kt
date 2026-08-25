@@ -107,11 +107,21 @@ val AppAccentColors = listOf(
 )
 
 class MainActivity : ComponentActivity() {
+    private lateinit var downloaderViewModel: DownloaderViewModel
+
+    override fun onStop() {
+        super.onStop()
+        if (::downloaderViewModel.isInitialized) {
+            downloaderViewModel.saveQueue()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             val viewModel: DownloaderViewModel = viewModel()
+            this.downloaderViewModel = viewModel
             val config by viewModel.appConfig.collectAsState()
             
             val isDarkTheme = when (config.theme) {
@@ -165,6 +175,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainScreen(viewModel: DownloaderViewModel, config: AppConfig) {
     val downloads by viewModel.downloadQueue.collectAsState()
+    val individualProgressMap by DownloadManager.progressMap.collectAsState()
     val settings by viewModel.currentSettings.collectAsState()
     var urlInput by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
@@ -380,7 +391,12 @@ fun MainScreen(viewModel: DownloaderViewModel, config: AppConfig) {
             
             val activeDownloads = downloads.filter { it.status != "Cancelled" }
             if (activeDownloads.isNotEmpty()) {
-                val avgProgress = activeDownloads.map { it.progress }.average().toFloat()
+                val totalFiles = activeDownloads.sumOf { if (it.isPlaylist && it.totalItems > 0) it.totalItems else 1 }
+                val completedFilesProgress = activeDownloads.sumOf { 
+                    val items = if (it.isPlaylist && it.totalItems > 0) it.totalItems else 1
+                    (it.progress.toDouble() / 100.0) * items
+                }
+                val avgProgress = if (totalFiles > 0) (completedFilesProgress / totalFiles.toDouble() * 100.0).toFloat() else 0f
                 Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -391,14 +407,14 @@ fun MainScreen(viewModel: DownloaderViewModel, config: AppConfig) {
                             style = MaterialTheme.typography.labelMedium
                         )
                         Text(
-                            "${(avgProgress * 100).toInt()}%",
+                            "${avgProgress.toInt()}%",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
                         )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     LinearProgressIndicator(
-                        progress = { if (avgProgress.isNaN()) 0f else avgProgress },
+                        progress = { if (avgProgress.isNaN()) 0f else (avgProgress / 100f).coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth().height(8.dp),
                         color = MaterialTheme.colorScheme.primary,
                         trackColor = MaterialTheme.colorScheme.primaryContainer
@@ -423,7 +439,7 @@ fun MainScreen(viewModel: DownloaderViewModel, config: AppConfig) {
             
             Spacer(modifier = Modifier.height(8.dp))
             
-            val filteredActiveDownloads = downloads.filter { it.status == "Downloading" || it.status == "Extracting" || it.status == "Queued" || it.status == "Paused" || it.status == "Completed" || it.status == "Error" }
+            val filteredActiveDownloads = downloads.filter { it.status != "Cancelled" }
             
             if (filteredActiveDownloads.isEmpty()) {
                 Box(
@@ -505,6 +521,7 @@ fun MainScreen(viewModel: DownloaderViewModel, config: AppConfig) {
                                 content = {
                                     DownloadItemCard(
                                         download = download,
+                                        individualProgress = individualProgressMap[download.id],
                                         onRemove = { viewModel.removeDownload(download.id) },
                                         onCancel = { viewModel.cancelDownload(download.id) },
                                         onPause = { viewModel.pauseDownload(download.id) },
@@ -541,18 +558,17 @@ fun MainScreen(viewModel: DownloaderViewModel, config: AppConfig) {
 
         LaunchedEffect(formatDialogUrl) {
             isLoadingQualities = true
-            val qualities = viewModel.fetchAvailableFormats(formatDialogUrl!!)
+            val (title, qualities) = viewModel.fetchAvailableFormats(formatDialogUrl!!)
+            formatDialogTitle = title
             availableFormats = qualities
             
-            if (formatDialogUrl?.contains("list=") == true) {
-                isAudio = false
-                selectedFormatId = null
-                
-            } else {
-                downloadSubtitles = false
-                if (qualities.isNotEmpty()) {
-                    selectedFormatId = qualities.firstOrNull()?.formatId
-                }
+            isAudio = false
+            downloadSubtitles = false
+            if (qualities.isNotEmpty()) {
+                val defaultVideoFormat = qualities.find { it.height == 720 && !it.isAudioOnly }
+                    ?: qualities.firstOrNull { !it.isAudioOnly }
+                    ?: qualities.firstOrNull()
+                selectedFormatId = defaultVideoFormat?.formatId
             }
             
             isLoadingQualities = false
@@ -582,7 +598,7 @@ fun MainScreen(viewModel: DownloaderViewModel, config: AppConfig) {
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text("Available Formats:")
-                        LazyColumn(modifier = Modifier.height(150.dp)) {
+                        LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
                             val filteredFormats = availableFormats?.filter { it.isAudioOnly == isAudio } ?: emptyList()
                             items(filteredFormats) { formatOpt ->
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { selectedFormatId = formatOpt.formatId }.fillMaxWidth()) {
@@ -607,19 +623,27 @@ fun MainScreen(viewModel: DownloaderViewModel, config: AppConfig) {
                 Button(
                     enabled = !isLoadingQualities,
                     onClick = {
+                    val selectedFormat = availableFormats?.find { it.formatId == selectedFormatId }
+                    val saveFmt = if (isAudio) {
+                        if (selectedFormat?.label?.contains("M4A") == true) "m4a" else "mp3"
+                    } else "mp4"
+
                     val customSettings = DownloadSettings(
                         audioOnly = isAudio,
                         downloadSubtitles = downloadSubtitles,
-                        saveFormat = "mp3",
-                        customFormatId = selectedFormatId
+                        saveFormat = saveFmt,
+                        customFormatId = selectedFormatId,
+                        formatLabel = if (isAudio) "Audio ($saveFmt)" else "Video (${selectedFormat?.label ?: "Auto"})",
+                        selectedHeight = selectedFormat?.height ?: 0
                     )
                     val urls = formatDialogUrl!!.split(Regex("\\s+")).filter { it.isNotBlank() && (it.startsWith("http://") || it.startsWith("https://") || it.contains("youtu")) }
                     if (urls.size > 1) {
                         urls.forEach { u ->
-                            viewModel.addDownload(u, "Unknown Title", false, customSettings)
+                            viewModel.addDownload(u, "Unknown Title", u.contains("list="), customSettings)
                         }
                     } else {
-                        viewModel.addDownload(formatDialogUrl!!.trim(), formatDialogTitle ?: "Unknown Title", false, customSettings)
+                        val urlStr = formatDialogUrl!!.trim()
+                        viewModel.addDownload(urlStr, formatDialogTitle ?: "Unknown Title", urlStr.contains("list="), customSettings)
                     }
                     urlInput = ""
                     searchResults = emptyList<SearchResult>()
@@ -732,6 +756,7 @@ fun MainScreen(viewModel: DownloaderViewModel, config: AppConfig) {
 @Composable
 fun DownloadItemCard(
     download: QueuedDownload,
+    individualProgress: Float? = null,
     onRemove: () -> Unit,
     onCancel: () -> Unit,
     onPause: () -> Unit,
@@ -748,15 +773,13 @@ fun DownloadItemCard(
                     val intent = android.content.Intent(android.content.Intent.ACTION_VIEW)
                     val uri = android.net.Uri.parse(uriStr)
                     
-                    if (uriStr.startsWith("content://") && download.isPlaylist) {
-                        intent.data = uri
-                    } else if (uriStr.startsWith("file://")) {
-                        val file = java.io.File(uri.path!!)
+                    val file = java.io.File(if (uriStr.startsWith("file://")) uri.path!! else uriStr)
+                    if (file.exists()) {
                         val contentUri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
                         val mime = if (uriStr.endsWith(".mp4") || uriStr.endsWith(".webm") || uriStr.endsWith(".mkv")) "video/*" else "audio/*"
                         intent.setDataAndType(contentUri, mime)
                         intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    } else {
+                    } else if (uriStr.startsWith("content://")) {
                         val mime = if (uriStr.endsWith(".mp4") || uriStr.endsWith(".webm") || uriStr.endsWith(".mkv")) "video/*" else "audio/*"
                         intent.setDataAndType(uri, mime)
                         intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -787,7 +810,7 @@ fun DownloadItemCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = download.title,
+                        text = if (download.isPlaylist && download.currentDownloadingTitle.isNotEmpty() && download.status == "Downloading") download.currentDownloadingTitle else download.title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1
@@ -803,10 +826,21 @@ fun DownloadItemCard(
                     // Show format explicitly (so they know what quality was chosen when queued)
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = if (download.settings.audioOnly) "Format: Audio (MP3)" else "Format: Video (${download.settings.quality.label})",
+                        text = if (download.settings.formatLabel.isNotEmpty()) "Format: ${download.settings.formatLabel}" else if (download.settings.audioOnly) "Format: Audio (MP3)" else "Format: Video (${download.settings.quality.label})",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary
                     )
+                    
+                    if (download.isPlaylist && download.totalItems > 0) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Downloading ${download.currentItemIndex} of ${download.totalItems}: ${download.currentDownloadingTitle}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.secondary,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
                 }
                 Icon(
                     Icons.Default.DragHandle,
@@ -841,8 +875,14 @@ fun DownloadItemCard(
                     }
                 )
                 
+                val progressText = if (download.isPlaylist && download.totalItems > 0 && download.status == "Downloading") {
+                    "${download.progress.toInt()}% Overall (${download.currentItemProgress.toInt()}% file)"
+                } else {
+                    "${download.progress.toInt()}%"
+                }
+                
                 Text(
-                    text = "${(download.progress * 100).toInt()}%",
+                    text = progressText,
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Bold
                 )
@@ -872,7 +912,10 @@ fun DownloadItemCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 LinearProgressIndicator(
-                    progress = { download.progress },
+                    progress = { 
+                        val itemProgress = individualProgress ?: download.progress
+                        if (itemProgress.isNaN()) 0f else (itemProgress / 100f).coerceIn(0f, 1f) 
+                    },
                     modifier = Modifier.weight(1f),
                     color = if (download.status == "Completed") 
                         Color(0xFF4CAF50) 
@@ -1191,6 +1234,21 @@ fun SettingsBottomSheet(
                         )
                 )
             }
+            Text(text = "Max Concurrent Downloads: ${config.maxConcurrentDownloads}", modifier = Modifier.padding(top = 16.dp))
+            androidx.compose.material3.Slider(
+                value = config.maxConcurrentDownloads.toFloat(),
+                onValueChange = { 
+                    onConfigChanged(config.copy(maxConcurrentDownloads = it.toInt()))
+                    val intent = android.content.Intent(context, DownloadService::class.java).apply {
+                        action = DownloadService.ACTION_CHECK_QUEUE
+                    }
+                    androidx.core.content.ContextCompat.startForegroundService(context, intent)
+                },
+                valueRange = 1f..10f,
+                steps = 8,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,

@@ -1,25 +1,26 @@
 import re
-
 with open("app/src/main/java/com/aistudio/ytdownloader/MainActivity.kt", "r") as f:
-    content = f.read()
+    text = f.read()
 
-target = '''                    IconButton(onClick = { filePickerLauncher.launch("text/plain") }, modifier = Modifier.height(56.dp).padding(end = 4.dp)) {
-                        Icon(Icons.Default.FileOpen, contentDescription = "Batch Download from TXT")
-                    }'''
+# Update the progress percentage text
+old_text_progress = """                Text(
+                    text = "${download.progress.toInt()}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold
+                )"""
+new_text_progress = """                val progressText = if (download.isPlaylist && download.totalItems > 0 && download.status == "Downloading") {
+                    "${download.progress.toInt()}% Overall (${download.currentItemProgress.toInt()}% file)"
+                } else {
+                    "${download.progress.toInt()}%"
+                }
+                
+                Text(
+                    text = progressText,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold
+                )"""
 
-rep = '''                    OutlinedButton(
-                        onClick = { filePickerLauncher.launch("text/plain") },
-                        modifier = Modifier.height(56.dp).padding(end = 4.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp)
-                    ) {
-                        Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("TXT")
-                    }'''
-
-content = content.replace(target, rep)
+text = text.replace(old_text_progress, new_text_progress)
 
 with open("app/src/main/java/com/aistudio/ytdownloader/MainActivity.kt", "w") as f:
-    f.write(content)
-
-print("done")
+    f.write(text)

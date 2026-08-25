@@ -93,4 +93,5 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
     implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1")
+    implementation("com.google.code.gson:gson:2.11.0")
 }

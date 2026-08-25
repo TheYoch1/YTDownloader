@@ -10,18 +10,20 @@ enum class VideoQuality(val label: String, val fps: Int) {
 
 data class DownloadSettings(
     var saveFormat: String = "mp3",
-    var audioOnly: Boolean = true,
+    var audioOnly: Boolean = false,
     var quality: VideoQuality = VideoQuality.High720,
     var tagAudioFile: Boolean = true,
     var filenamePattern: String = "\$title",
     var openDestinationFolderWhenDone: Boolean = false,
     var convert: Boolean = false,
     var downloadSubtitles: Boolean = false,
-    var customFormatId: String? = null
+    var customFormatId: String? = null,
+    var formatLabel: String = "",
+    var selectedHeight: Int = 0
 )
 
 data class AppConfig(
-    var theme: String = "Dark",
+    var theme: String = "System",
     var accent: String = "Teal",
     var saveDirectory: String = "Default",
     var maxConcurrentDownloads: Int = 1,
@@ -41,7 +43,12 @@ data class QueuedDownload(
     var downloadSpeed: String = "",
     val settings: DownloadSettings,
     var errorMessage: String? = null,
-    var localFilePath: String? = null
+    var localFilePath: String? = null,
+    var currentItemIndex: Int = 0,
+    var totalItems: Int = 0,
+    var currentDownloadingTitle: String = "",
+    var currentItemProgress: Float = 0f,
+    val timestamp: Long = System.currentTimeMillis()
 )
 
 data class QualityOption(val quality: VideoQuality, val sizeStr: String)
