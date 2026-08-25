@@ -20,6 +20,11 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
+
       - name: Decode Keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > release-key.jks
 
@@ -30,16 +35,10 @@ jobs:
           echo "keystore.alias=${{ secrets.KEY_ALIAS }}" >> local.properties
           echo "key.password=${{ secrets.KEY_PASSWORD }}" >> local.properties
 
-      - name: Generate Gradle Wrapper
-        run: gradle wrapper
-
-      - name: Make Gradle Executable
-        run: chmod +x gradlew
-
       - name: Build Signed APK
         env:
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
-        run: ./gradlew assembleRelease
+        run: gradle assembleRelease
 
       - name: Generate version.json
         run: |
