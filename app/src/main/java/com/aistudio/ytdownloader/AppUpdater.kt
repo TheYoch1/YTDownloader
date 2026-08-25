@@ -16,7 +16,7 @@ data class UpdateInfo(
 
 object AppUpdater {
     // Replace with the actual URL where your version.json is hosted
-    private const val UPDATE_URL = "https://raw.githubusercontent.com/YOUR_GITHUB_NAME/YOUR_REPO/main/version.json"
+    private const val UPDATE_URL = "https://TheYoch1.github.io/YTDownloader/version.json"
 
     suspend fun checkForUpdates(context: Context): UpdateInfo? = withContext(Dispatchers.IO) {
         try {
