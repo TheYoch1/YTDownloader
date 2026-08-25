@@ -244,6 +244,7 @@ class DownloaderViewModel(application: Application) : AndroidViewModel(applicati
         try {
             if (url.contains("list=")) return@withContext VideoQuality.values().map { QualityOption(it, "") }
             val req = com.yausername.youtubedl_android.YoutubeDLRequest(url)
+            req.addOption("--extractor-args", "youtube:player-client=web,mweb")
             val info = YoutubeDL.getInstance().getInfo(req)
             val formats = info.formats ?: emptyList()
             
@@ -373,6 +374,7 @@ class DownloaderViewModel(application: Application) : AndroidViewModel(applicati
             withContext(Dispatchers.IO) {
                 try {
                     val req = com.yausername.youtubedl_android.YoutubeDLRequest(url)
+            req.addOption("--extractor-args", "youtube:player-client=web,mweb")
             val info = YoutubeDL.getInstance().getInfo(req)
                     titleStr = info.title ?: "Unknown Title"
                     _downloadQueue.update { q -> q.map { if (it.id == id) it.copy(title = titleStr) else it } }
@@ -386,6 +388,7 @@ class DownloaderViewModel(application: Application) : AndroidViewModel(applicati
                 tmpDir?.mkdirs()
                 
                 val request = YoutubeDLRequest(url)
+                request.addOption("--extractor-args", "youtube:player-client=web,mweb")
                 request.addOption("--force-overwrites")
                 request.addOption("--retries", "infinite")
                 request.addOption("--fragment-retries", "infinite")

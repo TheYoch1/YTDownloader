@@ -17,6 +17,9 @@ import androidx.compose.ui.unit.dp
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.ffmpeg.FFmpeg
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.DelicateCoroutinesApi
 
 sealed class SplashState {
     object Loading : SplashState()
@@ -65,6 +68,32 @@ class SplashActivity : ComponentActivity() {
                     YoutubeDL.getInstance().init(applicationContext)
                     FFmpeg.getInstance().init(applicationContext)
                     
+                    // 3. Force Auto-Update of yt-dlp
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            val prefs = getSharedPreferences("app_prefs", MODE_PRIVATE)
+                            val lastUpdate = prefs.getLong("last_ytdlp_update", 0L)
+                            val now = System.currentTimeMillis()
+                            val ninetyDaysInMillis = 90L * 24 * 60 * 60 * 1000
+                            
+                            // Block and force update if older than 90 days (or never updated)
+                            if (now - lastUpdate > ninetyDaysInMillis || lastUpdate == 0L) {
+                                YoutubeDL.getInstance().updateYoutubeDL(applicationContext, YoutubeDL.UpdateChannel.STABLE)
+                                prefs.edit().putLong("last_ytdlp_update", now).apply()
+                            } else {
+                                // Otherwise, check opportunistically in background without blocking
+                                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                    try {
+                                        YoutubeDL.getInstance().updateYoutubeDL(applicationContext, YoutubeDL.UpdateChannel.STABLE)
+                                        prefs.edit().putLong("last_ytdlp_update", System.currentTimeMillis()).apply()
+                                    } catch(e: Exception) { }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                    
                     // Proceed to MainActivity
                     startActivity(Intent(this@SplashActivity, MainActivity::class.java))
                     finish()
@@ -86,6 +115,13 @@ class SplashActivity : ComponentActivity() {
                                         try {
                                             YoutubeDL.getInstance().init(applicationContext)
                                             FFmpeg.getInstance().init(applicationContext)
+                                            
+                                            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                try {
+                                                    YoutubeDL.getInstance().updateYoutubeDL(applicationContext, YoutubeDL.UpdateChannel.STABLE)
+                                                } catch(e: Exception) { }
+                                            }
+
                                             startActivity(Intent(this@SplashActivity, MainActivity::class.java))
                                             finish()
                                         } catch (e: Exception) {

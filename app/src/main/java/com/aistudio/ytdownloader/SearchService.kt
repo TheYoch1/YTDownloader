@@ -19,6 +19,7 @@ suspend fun searchYouTubeVideos(query: String): List<SearchResult> = withContext
     val results = mutableListOf<SearchResult>()
     try {
         val request = YoutubeDLRequest("ytsearch15:$query")
+        request.addOption("--extractor-args", "youtube:player-client=web,mweb")
         request.addOption("--dump-json")
         request.addOption("--flat-playlist")
         request.addOption("--ignore-errors")
