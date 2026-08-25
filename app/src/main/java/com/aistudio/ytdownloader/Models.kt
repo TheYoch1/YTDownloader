@@ -16,7 +16,8 @@ data class DownloadSettings(
     var filenamePattern: String = "\$title",
     var openDestinationFolderWhenDone: Boolean = false,
     var convert: Boolean = false,
-    var downloadSubtitles: Boolean = false
+    var downloadSubtitles: Boolean = false,
+    var customFormatId: String? = null
 )
 
 data class AppConfig(
@@ -44,3 +45,11 @@ data class QueuedDownload(
 )
 
 data class QualityOption(val quality: VideoQuality, val sizeStr: String)
+
+data class FormatOption(
+    val formatId: String,
+    val label: String,
+    val sizeStr: String,
+    val isAudioOnly: Boolean,
+    val height: Int = 0
+)

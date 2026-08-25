@@ -530,24 +530,28 @@ fun MainScreen(viewModel: DownloaderViewModel, config: AppConfig) {
     
     if (formatDialogUrl != null) {
         var isAudio by remember(formatDialogUrl) { mutableStateOf(false) }
-        var selectedQuality by remember(formatDialogUrl) { mutableStateOf(settings.quality) }
+        var selectedFormatId by remember(formatDialogUrl) { mutableStateOf<String?>(null) }
+        if (formatDialogUrl?.contains("list=") == true) {
+            isAudio = false
+            
+        }
         var downloadSubtitles by remember(formatDialogUrl) { mutableStateOf(settings.downloadSubtitles) }
-        var availableQualities by remember { mutableStateOf<List<QualityOption>?>(null) }
+        var availableFormats by remember { mutableStateOf<List<FormatOption>?>(null) }
         var isLoadingQualities by remember(formatDialogUrl) { mutableStateOf(true) }
 
         LaunchedEffect(formatDialogUrl) {
             isLoadingQualities = true
-            val qualities = viewModel.fetchAvailableQualities(formatDialogUrl!!)
-            availableQualities = qualities
+            val qualities = viewModel.fetchAvailableFormats(formatDialogUrl!!)
+            availableFormats = qualities
             
             if (formatDialogUrl?.contains("list=") == true) {
                 isAudio = false
-                selectedQuality = VideoQuality.High720
-                downloadSubtitles = settings.downloadSubtitles
+                selectedFormatId = null
+                
             } else {
                 downloadSubtitles = false
                 if (qualities.isNotEmpty()) {
-                    selectedQuality = qualities.find { it.quality == selectedQuality }?.quality ?: qualities.lastOrNull()?.quality ?: VideoQuality.High720
+                    selectedFormatId = qualities.firstOrNull()?.formatId
                 }
             }
             
@@ -576,17 +580,18 @@ fun MainScreen(viewModel: DownloaderViewModel, config: AppConfig) {
                             RadioButton(selected = isAudio, onClick = { isAudio = true })
                             Text("Audio (MP3)")
                         }
-                        if (!isAudio) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("Quality:")
-                            LazyColumn(modifier = Modifier.height(150.dp)) {
-                                items(availableQualities ?: VideoQuality.values().map { QualityOption(it, "") }) { qualityOpt ->
-                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { selectedQuality = qualityOpt.quality }.fillMaxWidth()) {
-                                        RadioButton(selected = selectedQuality == qualityOpt.quality, onClick = { selectedQuality = qualityOpt.quality })
-                                        Text(if (qualityOpt.sizeStr.isNotEmpty()) "${qualityOpt.quality.label} (~${qualityOpt.sizeStr})" else qualityOpt.quality.label)
-                                    }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Available Formats:")
+                        LazyColumn(modifier = Modifier.height(150.dp)) {
+                            val filteredFormats = availableFormats?.filter { it.isAudioOnly == isAudio } ?: emptyList()
+                            items(filteredFormats) { formatOpt ->
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { selectedFormatId = formatOpt.formatId }.fillMaxWidth()) {
+                                    RadioButton(selected = selectedFormatId == formatOpt.formatId, onClick = { selectedFormatId = formatOpt.formatId })
+                                    Text(if (formatOpt.sizeStr.isNotEmpty()) "${formatOpt.label} (~${formatOpt.sizeStr})" else formatOpt.label)
                                 }
                             }
+                        }
+                        if (!isAudio) {
                             Spacer(modifier = Modifier.height(8.dp))
                             if (settings.downloadSubtitles) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -594,9 +599,6 @@ fun MainScreen(viewModel: DownloaderViewModel, config: AppConfig) {
                                     Text("Download English Subtitles")
                                 }
                             }
-                        } else {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("Format will be MP3 (Best Quality)")
                         }
                     }
                 }
@@ -607,17 +609,17 @@ fun MainScreen(viewModel: DownloaderViewModel, config: AppConfig) {
                     onClick = {
                     val customSettings = DownloadSettings(
                         audioOnly = isAudio,
-                        quality = selectedQuality,
                         downloadSubtitles = downloadSubtitles,
-                        saveFormat = "mp3"
+                        saveFormat = "mp3",
+                        customFormatId = selectedFormatId
                     )
                     val urls = formatDialogUrl!!.split(Regex("\\s+")).filter { it.isNotBlank() && (it.startsWith("http://") || it.startsWith("https://") || it.contains("youtu")) }
                     if (urls.size > 1) {
                         urls.forEach { u ->
-                            viewModel.addDownload(u, null, customSettings)
+                            viewModel.addDownload(u, "Unknown Title", false, customSettings)
                         }
                     } else {
-                        viewModel.addDownload(formatDialogUrl!!.trim(), formatDialogTitle, customSettings)
+                        viewModel.addDownload(formatDialogUrl!!.trim(), formatDialogTitle ?: "Unknown Title", false, customSettings)
                     }
                     urlInput = ""
                     searchResults = emptyList<SearchResult>()
