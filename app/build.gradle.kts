@@ -48,6 +48,17 @@ android {
                 storePassword = keystoreProperties.getProperty("keystore.password")
                 keyAlias = keystoreProperties.getProperty("keystore.alias")
                 keyPassword = keystoreProperties.getProperty("key.password")
+            } else {
+                storeFile = file("${rootDir}/debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+            if (false) {
+                storeFile = file(keyPath)
+                storePassword = keystoreProperties.getProperty("keystore.password")
+                keyAlias = keystoreProperties.getProperty("keystore.alias")
+                keyPassword = keystoreProperties.getProperty("key.password")
             }
         }
     }
